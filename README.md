@@ -5,16 +5,15 @@
   <img src="https://img.shields.io/badge/Vue-3.4-green.svg" alt="Vue">
   <img src="https://img.shields.io/badge/Scikit--learn-1.9-orange.svg" alt="Scikit-learn">
   <img src="https://img.shields.io/badge/EMQX-5.3.2-brightgreen.svg" alt="EMQX">
-  <img src="https://img.shields.io/badge/Accuracy-98.43%25-success.svg" alt="Accuracy">
 </p>
 
 基于多模态信号（振动 + 声学）与机器学习的电机智能故障诊断系统。利用 HUSTmotor 公开数据集，构建完整覆盖"数据采集 → 数据传输 → 数据处理 → 数据应用"全链路的工业互联网原型系统。
 
-> 📖 **新手上路？** 请先阅读 [快速开始.md](快速开始.md)，从零搭建运行环境。
+> - **快速开始** 请先阅读 [快速开始.md](快速开始.md)，从零搭建运行环境。
 >
-> 📋 **技术设计？** 请参阅 [项目框架.md](项目框架.md)，了解架构设计与实现细节。
+> - **技术设计** 请参阅 [项目框架.md](项目框架.md)，了解架构设计与实现细节。
 >
-> 📊 **数据集？** 请参考 [数据集说明.md](数据集说明.md)，了解数据来源与格式。
+> - **数据集** 请参考 [数据集说明.md](数据集说明.md)，了解数据来源与格式。
 
 ## 项目概要
 
@@ -27,16 +26,7 @@
 
 ## 系统架构
 
-```
-┌──────────────────┐     MQTT      ┌──────────────────┐    SQLite    ┌──────────────────┐     HTTP      ┌──────────────────┐
-│   producer.py    │ ────────────→ │   consumer.py    │ ──────────→ │     app.py       │ ────────────→ │    Dashboard     │
-│   数据采集模拟层   │ motor/sensor  │   数据处理推理层   │             │   Flask REST API  │              │   Vue 3 + ECharts │
-│                  │    _data      │                  │             │                  │              │   可视化大屏       │
-└──────────────────┘              ┌──────────────────┐             └──────────────────┘              └──────────────────┘
-                                  │  motor_model.pkl │
-                                  │  (离线训练产出)    │
-                                  └──────────────────┘
-```
+![系统框架](img/系统框架.jpg)
 
 两条流水线通过模型文件衔接，各自独立运行：
 

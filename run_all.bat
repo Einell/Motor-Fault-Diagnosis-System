@@ -8,10 +8,10 @@ echo ================================================
 echo.
 
 REM ============================================
-REM 配置区（根据实际路径修改）
+REM 配置区（根据你的实际路径修改下面这一行）
 REM ============================================
 set PROJECT_DIR=%~dp0
-set EMQX_BIN=E:\BaiduNetdiskDownload\emqx-5.3.2-windows-amd64\bin
+set EMQX_BIN=E:\emqx-5.3.2-windows-amd64\bin
 
 echo [0/4] 检查 EMQX 是否运行...
 curl -s http://localhost:18083 >nul 2>&1
