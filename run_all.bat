@@ -9,7 +9,7 @@ echo.
 
 REM === CONFIG: set your emqx\bin path here ===
 set "PROJECT_DIR=%~dp0"
-set "EMQX_BIN=E:\emqx-5.3.2-windows-amd64\bin"
+set "EMQX_BIN=E:BaiduNetdiskDownload\emqx-5.3.2-windows-amd64\bin"
 
 REM === [0] EMQX ===
 echo [0/4] Starting EMQX...
