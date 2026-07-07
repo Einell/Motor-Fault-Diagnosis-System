@@ -10,7 +10,13 @@
 
 基于多模态信号（振动 + 声学）与机器学习的电机智能故障诊断系统。利用 HUSTmotor 公开数据集，构建完整覆盖"数据采集 → 数据传输 → 数据处理 → 数据应用"全链路的工业互联网原型系统。
 
-## 项目概述
+> 📖 **新手上路？** 请先阅读 [快速开始.md](快速开始.md)，从零搭建运行环境。
+>
+> 📋 **技术设计？** 请参阅 [项目框架.md](项目框架.md)，了解架构设计与实现细节。
+>
+> 📊 **数据集？** 请参考 [数据集说明.md](数据集说明.md)，了解数据来源与格式。
+
+## 项目概要
 
 - **数据集**：HUSTmotor 多模态电机故障数据集，24 个文件，163,840 采样点/文件
 - **传感器**：三轴振动加速度计（X/Y/Z）+ 麦克风（Sound），采样率 25.6 kHz
@@ -32,135 +38,66 @@
                                   └──────────────────┘
 ```
 
-**两条流水线**：
+两条流水线通过模型文件衔接，各自独立运行：
 
-| 流水线 | 名称 | 执行频率 | 说明 |
-|--------|------|---------|------|
-| 流水线一 | 离线模型训练 | 一次性 | 数据加载 → 清洗 → 滑动窗口 → 70 维特征提取 → RF 训练 → 评估 → 保存模型 |
-| 流水线二 | 在线实时推理 | 持续运行 | MQTT 订阅 → 特征提取 → 模型推理 → SQLite 存储 → Flask API → 大屏展示 |
+| 流水线 | 名称 | 频率 | 核心流程 |
+|--------|------|------|---------|
+| **流水线一** | 离线模型训练 | 一次性 | 数据加载 → 3σ清洗 → 滑动窗口 → 70维特征 → 分层8:2划分 → RF训练 → 评估 → 保存 |
+| **流水线二** | 在线实时推理 | 持续运行 | MQTT接收 → 特征提取 → 模型推理 → SQLite存储 → Flask API → 大屏展示 |
 
-## 项目结构
+## 特征工程（70 维）
 
-```
-motor_health_project/
-├── data/                          # 原始数据集 (24 个 txt 文件)
-├── src/
-│   ├── config.py                  # 全局配置参数
-│   ├── feature_utils.py           # 特征提取函数 (70 维，流水线共用)
-│   ├── train_model.py             # 流水线一：离线模型训练
-│   ├── producer.py                # 流水线二：MQTT 数据模拟发送
-│   ├── consumer.py                # 流水线二：MQTT 接收 + 推理 + 存储
-│   └── app.py                     # 流水线二：Flask REST API (8 个端点)
-├── dashboard/                     # 可视化大屏 (Vue 3 + Vite + ECharts 5)
-│   └── src/
-│       ├── App.vue                # 主布局 + 故障告警
-│       ├── api/index.js           # API 调用封装
-│       └── components/
-│           ├── StatusGauge.vue    # 健康状态仪表盘
-│           ├── WaveformChart.vue  # 实时波形图
-│           ├── SpectrumChart.vue  # 四通道频谱 + 谐波标注
-│           ├── RmsTrend.vue       # RMS 振动趋势
-│           ├── FaultPie.vue       # 故障统计饼图
-│           └── HistoryPlayback.vue # 历史回放
-├── notebooks/                     # Jupyter Notebook 实验记录
-├── models/                        # 训练好的模型文件
-├── database/                      # SQLite 数据库 (运行时生成)
-├── logs/                          # Consumer 运行日志 (运行时生成)
-├── outputs/                       # 模型评估图表
-├── requirements.txt               # Python 依赖
-├── run_all.bat                    # Windows 一键启动脚本
-├── 快速开始.md                     # 详细操作指南
-├── 项目框架.md                     # 技术设计文档
-└── 数据集说明.txt                  # 数据集说明
-```
+全部采用无量纲或归一化特征，对转速变化天然鲁棒。与流水线一/二共用的 `feature_utils.py` 实现。
 
-## 快速开始
+| 特征类别 | 维度 | 核心指标 |
+|---------|:---:|------|
+| 无量纲时域 | 24 | 峭度、偏度、波峰因子(peak/rms)、波形因子(rms/abs_mean)、脉冲因子、裕度因子 ×4通道 |
+| 频谱统计 | 24 | 频谱质心、散布、偏度、峭度、平坦度、85%能量滚降点 ×4通道 |
+| 动态谐波 | 12 | 根据当前转速动态计算 fr，±3.5Hz 搜索窗提取 1×fr/2×fr/3×fr 归一化幅值 ×4通道 |
+| 跨通道比值 | 9 | 6项 RMS 比值 + 3项 Peak 比值，捕获振动能量在传感器间的分布模式 |
+| 转速 | 1 | 电机转频 fr（Hz） |
+| **合计** | **70** | 零填充 FFT (n_fft=8192)，频率分辨率 ~3.1 Hz，可分辨 5–30 Hz 转频 |
 
-### 环境要求
+## 可视化大屏
 
-- Python 3.8+ | Node.js 18+ | EMQX 5.3+
+6 面板暗色科技风大屏（Vue 3 + ECharts 5），每面板独立轮询（1s / 3s / 5s 差异化频率）：
 
-### 1. 安装依赖
+| 面板 | 功能 |
+|------|------|
+| 🔍 状态仪表盘 | 交通灯状态指示 + 置信度进度条 + 故障告警（浏览器通知 + 视觉闪烁） |
+| 📊 实时波形 | 四通道 1024 点振动波形同步绘制 |
+| 📈 频谱分析 | 四通道切换 + 转频谐波标记线（1×fr / 2×fr / 3×fr 虚线标注） |
+| 📉 RMS 趋势 | 最近 100 条四通道 RMS 趋势 + dataZoom 滚轮缩放 |
+| 🥧 故障统计 | 环形饼图 + 累计准确率 + 分类明细表 |
+| ⏮️ 历史回放 | 分页记录列表 + 点击加载波形预览 + 自动播放模式 |
 
-```bash
-# Python
-python -m venv venv
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-
-# 前端
-cd dashboard && npm install && cd ..
-```
-
-### 2. 流水线一：训练模型
-
-```bash
-python src/train_model.py
-```
-
-产出 `models/motor_model.pkl` 和 `outputs/` 下的评估图表。
-
-### 3. 流水线二：启动在线推理
-
-需要 4 个终端（详见 [快速开始.md](快速开始.md)）：
-
-| 终端 | 命令 | 说明 |
-|------|------|------|
-| 0 | `emqx.cmd console` | EMQX Broker |
-| 1 | `python src/app.py` | Flask API |
-| 2 | `python src/consumer.py` | 推理 + 存储 |
-| 3 | `python src/producer.py --no-loop` | 数据发送 |
-| 4 | `cd dashboard && npm run dev` | 可视化大屏 |
-
-浏览器打开 `http://localhost:3000` 查看大屏。
-
-或者直接双击运行 `run_all.bat` 一键启动所有服务。
-
-## 特征工程
-
-| 特征类别 | 维度 | 说明 |
-|---------|------|------|
-| 无量纲时域 | 24 | 峭度、偏度、波峰因子、波形因子、脉冲因子、裕度因子 × 4 通道 |
-| 频谱统计 | 24 | 质心、散布、偏度、峭度、平坦度、滚降点 × 4 通道 |
-| 动态谐波 | 12 | 1×fr / 2×fr / 3×fr 归一化幅值 × 4 通道 |
-| 跨通道比值 | 9 | RMS 比值 + Peak 比值（捕获振动能量分布） |
-| 转速 | 1 | 电机转速频率 |
-| **合计** | **70** | 全部为无量纲或归一化特征，对转速变化鲁棒 |
-
-## 大屏功能
-
-- 🔍 **状态仪表盘**：交通灯 + 置信度进度条 + 故障告警
-- 📊 **实时波形**：四通道 1024 点振动波形
-- 📈 **频谱分析**：四通道切换 + 转频谐波标注线
-- 📉 **RMS 趋势**：最近 100 条振动能量趋势 + dataZoom
-- 🥧 **故障统计**：环形饼图 + 累计准确率
-- ⏮️ **历史回放**：分页查询 + 选中波形预览 + 自动播放
-
-## API 端点
+## REST API
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
-| `/api/latest` | GET | 最新预测结果 |
-| `/api/trend?n=100` | GET | RMS 趋势数据 |
-| `/api/statistics` | GET | 故障分布统计 |
-| `/api/waveform` | GET | 最新波形数据 |
-| `/api/spectrum?channel=x` | GET | 四通道频谱 |
-| `/api/history/<id>` | GET | 历史记录详情 |
-| `/api/records?page=1&limit=50` | GET | 分页查询记录列表 |
-| `/api/health` | GET | 健康检查 |
+| `/api/latest` | GET | 最新预测结果（标签 + 置信度 + 正确性） |
+| `/api/trend?n=100` | GET | 最近 N 条 RMS 趋势数据 |
+| `/api/statistics` | GET | 故障分布统计 + 累计准确率 |
+| `/api/waveform` | GET | 最新四通道波形（1024 点 × 4） |
+| `/api/spectrum?channel=x` | GET | 四通道频谱（支持单通道筛选） |
+| `/api/history/<id>` | GET | 指定 ID 历史记录详情（含完整波形） |
+| `/api/records?page=1&limit=50` | GET | 分页查询记录列表（支持 `?label=BF` 筛选） |
+| `/api/health` | GET | 健康检查 + 数据库记录总数 |
 
 ## 技术栈
 
 | 层级 | 技术 |
 |------|------|
 | 数据处理 | Python, NumPy, Pandas, SciPy |
-| 机器学习 | Scikit-learn (Random Forest) |
-| 消息中间件 | EMQX (MQTT Broker), paho-mqtt |
-| 后端 API | Flask + flask-cors |
-| 数据库 | SQLite (WAL mode) |
-| 前端框架 | Vue 3, Vite, ECharts 5 |
-| 图表输出 | Matplotlib, Seaborn |
+| 机器学习 | Scikit-learn (Random Forest 200树) |
+| 消息中间件 | EMQX 5.3.2 (MQTT Broker), paho-mqtt |
+| 后端 API | Flask + flask-cors（8 个 REST 端点） |
+| 数据库 | SQLite (WAL 模式，自动清理 >20,000 条) |
+| 前端框架 | Vue 3 + Vite + ECharts 5 |
+| 日志系统 | Python logging + RotatingFileHandler（10MB 轮转） |
+| 评估图表 | Matplotlib + Seaborn |
+| 实验记录 | Jupyter Notebook × 3 |
 
 ## License
 
-本项目仅用于学术研究与教学演示。
+本项目仅用于学术研究与教学演示。数据集引用信息见 [数据集说明.md](数据集说明.md)。
