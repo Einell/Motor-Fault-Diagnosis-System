@@ -1,57 +1,60 @@
 @echo off
-chcp 65001 >nul
-title 电机故障诊断系统 — 一键启动
+chcp 936 >nul
+title Motor Fault Diagnosis - Quick Start
 
 echo ================================================
-echo   电机智能故障诊断系统 — 流水线二 一键启动
+echo   Motor Fault Diagnosis System
 echo ================================================
 echo.
 
-REM ============================================
-REM 配置区（根据你的实际路径修改下面这一行）
-REM ============================================
-set PROJECT_DIR=%~dp0
-set EMQX_BIN=E:\emqx-5.3.2-windows-amd64\bin
+REM === CONFIG: set your emqx\bin path here ===
+set "PROJECT_DIR=%~dp0"
+set "EMQX_BIN=E:\emqx-5.3.2-windows-amd64\bin"
 
-echo [0/4] 检查 EMQX 是否运行...
+REM === [0] EMQX ===
+echo [0/4] Starting EMQX...
 curl -s http://localhost:18083 >nul 2>&1
-if %errorlevel% neq 0 (
-    echo   正在启动 EMQX...
-    start "EMQX Broker" /D "%EMQX_BIN%" cmd /c "emqx.cmd console"
-    echo   等待 EMQX 启动 (15秒)...
+if errorlevel 1 (
+    echo   Launching EMQX from: %EMQX_BIN%
+    start "EMQX" /D "%EMQX_BIN%" emqx.cmd console
+    echo   Waiting 15 seconds...
     timeout /t 15 /nobreak >nul
 ) else (
-    echo   EMQX 已在运行
+    echo   EMQX is already running
 )
 
+REM === [1] Flask API ===
 echo.
-echo [1/4] 启动 Flask API 服务...
-start "Flask API" /D "%PROJECT_DIR%" cmd /c "venv\Scripts\python src\app.py --port 5000"
+echo [1/4] Starting Flask API...
+cd /d "%PROJECT_DIR%"
+start "Flask API" cmd /k "venv\Scripts\python src\app.py --port 5000"
 timeout /t 3 /nobreak >nul
 
-echo [2/4] 启动 Consumer (推理引擎)...
-start "Consumer" /D "%PROJECT_DIR%" cmd /c "venv\Scripts\python src\consumer.py"
+REM === [2] Consumer ===
+echo [2/4] Starting Consumer...
+start "Consumer" cmd /k "venv\Scripts\python src\consumer.py"
 timeout /t 3 /nobreak >nul
 
-echo [3/4] 启动 Producer (数据模拟)...
-start "Producer" /D "%PROJECT_DIR%" cmd /c "venv\Scripts\python src\producer.py --no-loop"
+REM === [3] Producer ===
+echo [3/4] Starting Producer...
+start "Producer" cmd /k "venv\Scripts\python src\producer.py --no-loop"
 
-echo [4/4] 启动 Dashboard (大屏前端)...
-start "Dashboard" /D "%PROJECT_DIR%\dashboard" cmd /c "npm run dev"
+REM === [4] Dashboard ===
+echo [4/4] Starting Dashboard...
+cd /d "%PROJECT_DIR%dashboard"
+start "Dashboard" cmd /k "npm run dev"
 
 echo.
 echo ================================================
-echo   全部启动完成！
+echo   All done! Open http://localhost:3000
 echo.
-echo   浏览器打开 http://localhost:3000 查看大屏
+echo   Running windows:
+echo     - EMQX Broker
+echo     - Flask API     (port 5000)
+echo     - Consumer      (inference)
+echo     - Producer      (data sender)
+echo     - Dashboard     (port 3000)
 echo.
-echo   已启动的窗口:
-echo     - EMQX Broker   (MQTT 消息中间件)
-echo     - Flask API     (localhost:5000)
-echo     - Consumer      (推理 + 存储)
-echo     - Producer      (数据模拟发送)
-echo     - Dashboard     (localhost:3000)
-echo.
-echo   关闭方式: 逐个关闭各窗口, 或直接关闭本窗口
+echo   Ctrl+C each window to stop.
 echo ================================================
 pause
