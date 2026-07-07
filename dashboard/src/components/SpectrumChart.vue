@@ -22,6 +22,12 @@ const hasData = ref(false)
 const activeCh = ref('x')
 let lastSpeed = 0
 
+// 预创建渐变对象，避免每次更新重建导致渲染丢失
+const areaGrad = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+  { offset: 0, color: 'rgba(0,229,255,0.25)' },
+  { offset: 1, color: 'rgba(0,229,255,0.02)' },
+])
+
 const channels = [
   { key: 'x', label: 'X轴', color: '#00e5ff' },
   { key: 'y', label: 'Y轴', color: '#ff6d00' },
@@ -30,14 +36,9 @@ const channels = [
 ]
 
 function pickSpectrum(data) {
-  // 新格式: data.x = {freqs:[...], amps:[...]}
-  if (data[activeCh.value] && data[activeCh.value].freqs && data[activeCh.value].freqs.length > 0) {
-    return data[activeCh.value]
-  }
-  // 旧格式兼容: data.freqs / data.amps
-  if (data.freqs && data.freqs.length > 0) {
-    return { freqs: data.freqs, amps: data.amps }
-  }
+  const ch = activeCh.value
+  if (data[ch] && data[ch].freqs && data[ch].freqs.length > 0) return data[ch]
+  if (data.freqs && data.freqs.length > 0) return { freqs: data.freqs, amps: data.amps }
   return null
 }
 
@@ -50,17 +51,18 @@ function buildMarkLines(speed) {
   ].map(({ h, label, color }) => ({
     silent: true, symbol: 'none',
     lineStyle: { type: 'dashed', color, width: 1.2, opacity: 0.7 },
-    label: { show: true, formatter: label, color, fontSize: 10,
-              position: 'end', distance: 3 },
+    label: { show: true, formatter: label, color, fontSize: 10, position: 'end', distance: 3 },
     data: [{ xAxis: speed * h }],
   }))
 }
 
-function ensureChart() {
-  if (chart) return true
-  if (!chartRef.value) return false
-  chart = echarts.init(chartRef.value)
-  chart.setOption({
+function fullOption(data, speed) {
+  const sp = pickSpectrum(data)
+  const pts = sp ? sp.freqs.map((f, i) => [f, sp.amps[i] || 0]) : []
+  const chColor = channels.find(c => c.key === activeCh.value).color
+  const markData = buildMarkLines(speed)
+
+  return {
     tooltip: { trigger: 'axis',
       formatter: p => `频率: ${p[0].data[0].toFixed(1)} Hz<br>幅值: ${p[0].data[1].toFixed(2)}` },
     grid: { top: 10, right: 15, bottom: 25, left: 45 },
@@ -78,18 +80,21 @@ function ensureChart() {
       axisLabel: { color: '#5a7a9a', fontSize: 9 },
     },
     series: [{
-      type: 'line', data: [], smooth: false,
-      lineStyle: { width: 1.5, color: '#00e5ff' },
-      areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: 'rgba(0,229,255,0.25)' },
-          { offset: 1, color: 'rgba(0,229,255,0.02)' },
-        ]),
-      },
+      type: 'line', data: pts, smooth: false,
+      lineStyle: { width: 2, color: chColor },
+      areaStyle: { color: areaGrad },
       symbol: 'none',
-      markLine: { silent: false, symbol: ['none', 'none'], data: [] },
+      markLine: markData.length > 0
+        ? { silent: false, symbol: ['none', 'none'], data: markData }
+        : undefined,
     }],
-  })
+  }
+}
+
+function ensureChart() {
+  if (chart) return true
+  if (!chartRef.value) return false
+  chart = echarts.init(chartRef.value)
   return true
 }
 
@@ -97,23 +102,13 @@ function refreshChart(data) {
   if (!data) return
   const sp = pickSpectrum(data)
   if (!sp || !sp.freqs || sp.freqs.length === 0) return
-
   if (!ensureChart()) return
 
   hasData.value = true
   lastSpeed = data.speed || lastSpeed
 
-  const pts = sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
-  const chColor = channels.find(c => c.key === activeCh.value).color
-
-  // 增量更新，不重建整个 option
-  chart.setOption({
-    series: [{
-      data: pts,
-      lineStyle: { color: chColor },
-      markLine: { data: buildMarkLines(lastSpeed) },
-    }],
-  })
+  // notMerge: true — 彻底替换整个option，消除合并模式下的增量更新bug
+  chart.setOption(fullOption(data, lastSpeed), true)
 }
 
 function switchChannel(key) {
