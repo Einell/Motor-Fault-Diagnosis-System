@@ -1,0 +1,16 @@
+训练集准确率: 0.9946
+测试集准确率: 0.9843
+Kappa 系数:   0.9811
+
+                   precision    recall  f1-score   support
+
+    Bearing Fault     1.0000    1.0000    1.0000       254
+      Bowed Rotor     1.0000    0.9843    0.9921       254
+Broken Rotor Bars     0.9459    0.9608    0.9533       255
+          Healthy     1.0000    1.0000    1.0000       255
+     Misalignment     1.0000    1.0000    1.0000       255
+Voltage Unbalance     0.9606    0.9606    0.9606       254
+
+         accuracy                         0.9843      1527
+        macro avg     0.9844    0.9843    0.9843      1527
+     weighted avg     0.9844    0.9843    0.9843      1527
