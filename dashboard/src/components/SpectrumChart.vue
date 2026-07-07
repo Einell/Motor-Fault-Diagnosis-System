@@ -99,22 +99,23 @@ function refreshChart(data) {
 
   const pts = sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
   const chColor = channels.find(c => c.key === activeCh.value).color
-  const update = {
+
+  // 只更新数据 + 显式保留线宽（ECharts合并时lineStyle会被整体替换）
+  chart.setOption({
     series: [{
       data: pts,
-      lineStyle: { color: chColor },
+      lineStyle: { width: 1.5, color: chColor },
     }],
-  }
+  })
 
-  // 仅在转速已知时追加谐波标注，避免markLine合并问题
+  // 谐波标注独立更新，避免和series.data合并时的互斥
   if (lastSpeed > 0) {
-    update.series[0].markLine = {
-      silent: false, symbol: ['none', 'none'],
-      data: buildMarkLines(lastSpeed),
-    }
+    chart.setOption({
+      series: [{
+        markLine: { silent: false, symbol: ['none', 'none'], data: buildMarkLines(lastSpeed) },
+      }],
+    })
   }
-
-  chart.setOption(update)
 }
 
 function switchChannel(key) {
