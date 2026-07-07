@@ -22,12 +22,6 @@ const hasData = ref(false)
 const activeCh = ref('x')
 let lastSpeed = 0
 
-// 预创建渐变对象，避免每次更新重建导致渲染丢失
-const areaGrad = new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-  { offset: 0, color: 'rgba(0,229,255,0.25)' },
-  { offset: 1, color: 'rgba(0,229,255,0.02)' },
-])
-
 const channels = [
   { key: 'x', label: 'X轴', color: '#00e5ff' },
   { key: 'y', label: 'Y轴', color: '#ff6d00' },
@@ -51,18 +45,18 @@ function buildMarkLines(speed) {
   ].map(({ h, label, color }) => ({
     silent: true, symbol: 'none',
     lineStyle: { type: 'dashed', color, width: 1.2, opacity: 0.7 },
-    label: { show: true, formatter: label, color, fontSize: 10, position: 'end', distance: 3 },
+    label: { show: true, formatter: label, color, fontSize: 10,
+              position: 'end', distance: 3 },
     data: [{ xAxis: speed * h }],
   }))
 }
 
-function fullOption(data, speed) {
-  const sp = pickSpectrum(data)
-  const pts = sp ? sp.freqs.map((f, i) => [f, sp.amps[i] || 0]) : []
-  const chColor = channels.find(c => c.key === activeCh.value).color
-  const markData = buildMarkLines(speed)
-
-  return {
+function ensureChart() {
+  if (chart) return true
+  if (!chartRef.value) return false
+  chart = echarts.init(chartRef.value)
+  // 初始option — 与原始工作版本一致，只加了空markLine占位
+  chart.setOption({
     tooltip: { trigger: 'axis',
       formatter: p => `频率: ${p[0].data[0].toFixed(1)} Hz<br>幅值: ${p[0].data[1].toFixed(2)}` },
     grid: { top: 10, right: 15, bottom: 25, left: 45 },
@@ -80,21 +74,17 @@ function fullOption(data, speed) {
       axisLabel: { color: '#5a7a9a', fontSize: 9 },
     },
     series: [{
-      type: 'line', data: pts, smooth: false,
-      lineStyle: { width: 2, color: chColor },
-      areaStyle: { color: areaGrad },
+      type: 'line', data: [], smooth: false,
+      lineStyle: { width: 1.5, color: '#00e5ff' },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(0,229,255,0.25)' },
+          { offset: 1, color: 'rgba(0,229,255,0.02)' },
+        ]),
+      },
       symbol: 'none',
-      markLine: markData.length > 0
-        ? { silent: false, symbol: ['none', 'none'], data: markData }
-        : undefined,
     }],
-  }
-}
-
-function ensureChart() {
-  if (chart) return true
-  if (!chartRef.value) return false
-  chart = echarts.init(chartRef.value)
+  })
   return true
 }
 
@@ -107,8 +97,24 @@ function refreshChart(data) {
   hasData.value = true
   lastSpeed = data.speed || lastSpeed
 
-  // notMerge: true — 彻底替换整个option，消除合并模式下的增量更新bug
-  chart.setOption(fullOption(data, lastSpeed), true)
+  const pts = sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
+  const chColor = channels.find(c => c.key === activeCh.value).color
+  const update = {
+    series: [{
+      data: pts,
+      lineStyle: { color: chColor },
+    }],
+  }
+
+  // 仅在转速已知时追加谐波标注，避免markLine合并问题
+  if (lastSpeed > 0) {
+    update.series[0].markLine = {
+      silent: false, symbol: ['none', 'none'],
+      data: buildMarkLines(lastSpeed),
+    }
+  }
+
+  chart.setOption(update)
 }
 
 function switchChannel(key) {
