@@ -12,12 +12,13 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({ data: Object })
 const chartRef = ref(null)
 let chart = null
+
 const hasData = ref(false)
 const activeCh = ref('x')
 let lastSpeed = 0
@@ -29,11 +30,11 @@ const channels = [
   { key: 'sound', label: 'Sound', color: '#e040fb' },
 ]
 
-function pickSpectrum(data, channel) {
-  const ch = channel || activeCh.value
-  if (data[ch] && data[ch].freqs && data[ch].freqs.length > 0) return data[ch]
-  if (data.freqs && data.freqs.length > 0) return { freqs: data.freqs, amps: data.amps }
-  return null
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgba(${r},${g},${b},${alpha})`
 }
 
 function buildMarkLines(speed) {
@@ -51,27 +52,9 @@ function buildMarkLines(speed) {
   }))
 }
 
-// 按通道颜色生成 areaStyle 渐变（hex → rgba 转换）
-function makeAreaGradient(hexColor) {
-  const r = parseInt(hexColor.slice(1, 3), 16)
-  const g = parseInt(hexColor.slice(3, 5), 16)
-  const b = parseInt(hexColor.slice(5, 7), 16)
-  return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-    { offset: 0, color: `rgba(${r},${g},${b},0.25)` },
-    { offset: 1, color: `rgba(${r},${g},${b},0.02)` },
-  ])
-}
-
-// 构建完整 ECharts option，用于 notMerge 模式避免合并问题
-function buildFullOption(data, chKey) {
-  const ch = channels.find(c => c.key === chKey) || channels[0]
-  const sp = data ? pickSpectrum(data, chKey) : null
-  const pts = (sp && sp.freqs && sp.freqs.length > 0)
-    ? sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
-    : []
-  const speed = (data && data.speed) ? data.speed : lastSpeed
-
-  const option = {
+function initChart() {
+  chart = echarts.init(chartRef.value)
+  chart.setOption({
     tooltip: {
       trigger: 'axis',
       formatter: p => `频率: ${p[0].data[0].toFixed(1)} Hz<br>幅值: ${p[0].data[1].toFixed(2)}`,
@@ -91,65 +74,82 @@ function buildFullOption(data, chKey) {
       axisLabel: { color: '#5a7a9a', fontSize: 9 },
     },
     series: [{
-      type: 'line', data: pts, smooth: false,
-      lineStyle: { width: 1.5, color: ch.color },
-      areaStyle: { color: makeAreaGradient(ch.color) },
+      type: 'line', data: [], smooth: false,
+      lineStyle: { width: 1.5, color: '#00e5ff' },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(0,229,255,0.25)' },
+          { offset: 1, color: 'rgba(0,229,255,0.02)' },
+        ]),
+      },
       symbol: 'none',
-      markLine: (speed > 0 && pts.length > 0) ? {
-        silent: false, symbol: ['none', 'none'],
-        data: buildMarkLines(speed),
-      } : undefined,
     }],
+  })
+}
+
+function pickSpectrum(data, channel) {
+  const ch = channel || activeCh.value
+  if (data[ch] && data[ch].freqs && data[ch].freqs.length > 0) {
+    return data[ch]
   }
-  return option
+  if (data.freqs && data.freqs.length > 0) {
+    return { freqs: data.freqs, amps: data.amps }
+  }
+  return null
 }
 
-function ensureChart() {
-  if (chart) return true
-  if (!chartRef.value) return false
-  chart = echarts.init(chartRef.value)
-  chart.setOption(buildFullOption(null, activeCh.value))
-  return true
-}
-
-function refreshChart(data) {
-  if (!data) return
-  if (!ensureChart()) return
+function updateChart(data) {
+  if (!chart || !data) return
 
   lastSpeed = data.speed || lastSpeed
 
+  const ch = channels.find(c => c.key === activeCh.value)
   const sp = pickSpectrum(data)
+
   if (!sp || !sp.freqs || sp.freqs.length === 0) {
-    // 无数据通道 → 清空曲线，保留坐标轴
-    chart.setOption(buildFullOption(null, activeCh.value), true)
+    chart.setOption({ series: [{ data: [] }] })
     return
   }
 
   hasData.value = true
-  // 关键：使用 notMerge: true，每次完整替换 option，避免 ECharts 合并 bug
-  chart.setOption(buildFullOption(data, activeCh.value), true)
+  const pts = sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
+
+  chart.setOption({
+    series: [{
+      data: pts,
+      lineStyle: { width: 1.5, color: ch.color },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: hexToRgba(ch.color, 0.25) },
+          { offset: 1, color: hexToRgba(ch.color, 0.02) },
+        ]),
+      },
+      markLine: lastSpeed > 0 ? {
+        silent: false, symbol: ['none', 'none'],
+        data: buildMarkLines(lastSpeed),
+      } : undefined,
+    }],
+  })
 }
 
 function switchChannel(key) {
   activeCh.value = key
-  if (props.data) refreshChart(props.data)
+  if (props.data) updateChart(props.data)
 }
 
-watch(() => props.data, async (val) => {
-  await nextTick()
-  refreshChart(val)
+watch(() => props.data, (val) => {
+  if (!chart && chartRef.value) { initChart() }
+  updateChart(val)
 }, { deep: true })
 
-onMounted(async () => {
-  await nextTick()
-  if (props.data) refreshChart(props.data)
+onMounted(() => {
+  if (props.data) { initChart(); updateChart(props.data) }
 })
+onUnmounted(() => { chart?.dispose() })
 
-onUnmounted(() => { chart?.dispose(); chart = null })
-
-const rh = () => chart?.resize()
-onMounted(() => window.addEventListener('resize', rh))
-onUnmounted(() => window.removeEventListener('resize', rh))
+const resizeHandler = () => chart?.resize()
+onMounted(() => window.addEventListener('resize', resizeHandler))
+onUnmounted(() => window.removeEventListener('resize', resizeHandler))
 </script>
 
 <style scoped>
