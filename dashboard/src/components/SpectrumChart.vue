@@ -90,17 +90,21 @@ function ensureChart() {
 
 function refreshChart(data) {
   if (!data) return
-  const sp = pickSpectrum(data)
-  if (!sp || !sp.freqs || sp.freqs.length === 0) return
   if (!ensureChart()) return
 
-  hasData.value = true
+  const sp = pickSpectrum(data)
   lastSpeed = data.speed || lastSpeed
 
+  if (!sp || !sp.freqs || sp.freqs.length === 0) {
+    // 切换到了无数据的通道 → 清空曲线，但保留坐标轴
+    chart.setOption({ series: [{ data: [] }] })
+    return
+  }
+
+  hasData.value = true
   const pts = sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
   const chColor = channels.find(c => c.key === activeCh.value).color
 
-  // 只更新数据 + 显式保留线宽（ECharts合并时lineStyle会被整体替换）
   chart.setOption({
     series: [{
       data: pts,
@@ -108,7 +112,6 @@ function refreshChart(data) {
     }],
   })
 
-  // 谐波标注独立更新，避免和series.data合并时的互斥
   if (lastSpeed > 0) {
     chart.setOption({
       series: [{
