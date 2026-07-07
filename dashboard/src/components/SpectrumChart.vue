@@ -4,7 +4,7 @@
     <div class="channel-tabs" v-if="hasData">
       <button v-for="ch in channels" :key="ch.key"
         :class="{ active: activeCh === ch.key }"
-        @click="activeCh = ch.key">{{ ch.label }}</button>
+        @click="switchChannel(ch.key)">{{ ch.label }}</button>
     </div>
     <div ref="chartRef" class="chart-box"></div>
     <div class="no-data" v-if="!hasData">等待数据...</div>
@@ -12,7 +12,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({ data: Object })
@@ -20,6 +20,7 @@ const chartRef = ref(null)
 let chart = null
 const hasData = ref(false)
 const activeCh = ref('x')
+let lastSpeed = 0
 
 const channels = [
   { key: 'x', label: 'X轴', color: '#00e5ff' },
@@ -28,38 +29,44 @@ const channels = [
   { key: 'sound', label: 'Sound', color: '#e040fb' },
 ]
 
-function getChannelSpectrum(data, ch) {
-  // 新格式: data.x.freqs / data.x.amps
-  if (data[ch] && data[ch].freqs) return data[ch]
+function pickSpectrum(data) {
+  // 新格式: data.x = {freqs:[...], amps:[...]}
+  if (data[activeCh.value] && data[activeCh.value].freqs && data[activeCh.value].freqs.length > 0) {
+    return data[activeCh.value]
+  }
   // 旧格式兼容: data.freqs / data.amps
-  if (data.freqs) return { freqs: data.freqs, amps: data.amps }
-  return { freqs: [], amps: [] }
+  if (data.freqs && data.freqs.length > 0) {
+    return { freqs: data.freqs, amps: data.amps }
+  }
+  return null
 }
 
 function buildMarkLines(speed) {
-  if (!speed) return []
-  const cfg = [
+  if (!speed || speed <= 0) return []
+  return [
     { h: 1, label: '1×fr', color: '#ff9100' },
     { h: 2, label: '2×fr', color: '#ff1744' },
     { h: 3, label: '3×fr', color: '#e040fb' },
-  ]
-  return cfg.map(({ h, label, color }) => ({
+  ].map(({ h, label, color }) => ({
     silent: true, symbol: 'none',
     lineStyle: { type: 'dashed', color, width: 1.2, opacity: 0.7 },
-    label: { show: true, formatter: label, color, fontSize: 10, position: 'end', distance: 3 },
+    label: { show: true, formatter: label, color, fontSize: 10,
+              position: 'end', distance: 3 },
     data: [{ xAxis: speed * h }],
   }))
 }
 
-function buildOption(data, speed) {
-  const chData = getChannelSpectrum(data, activeCh.value)
-  const pts = chData.freqs.map((f, i) => [f, chData.amps[i]])
-  const chColor = channels.find(c => c.key === activeCh.value).color
-  return {
-    tooltip: { trigger: 'axis', formatter: p => `频率: ${p[0].data[0].toFixed(1)} Hz<br>幅值: ${p[0].data[1].toFixed(2)}` },
+function ensureChart() {
+  if (chart) return true
+  if (!chartRef.value) return false
+  chart = echarts.init(chartRef.value)
+  chart.setOption({
+    tooltip: { trigger: 'axis',
+      formatter: p => `频率: ${p[0].data[0].toFixed(1)} Hz<br>幅值: ${p[0].data[1].toFixed(2)}` },
     grid: { top: 10, right: 15, bottom: 25, left: 45 },
     xAxis: {
-      type: 'value', name: 'Hz', nameTextStyle: { color: '#5a7a9a', fontSize: 9 },
+      type: 'value', name: 'Hz',
+      nameTextStyle: { color: '#5a7a9a', fontSize: 9 },
       axisLine: { lineStyle: { color: '#1a3a5c' } },
       axisLabel: { color: '#5a7a9a', fontSize: 9 },
       splitLine: { lineStyle: { color: '#1a2a40' } },
@@ -71,38 +78,60 @@ function buildOption(data, speed) {
       axisLabel: { color: '#5a7a9a', fontSize: 9 },
     },
     series: [{
-      type: 'line', data: pts, smooth: false,
-      lineStyle: { width: 1.5, color: chColor },
-      areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-        { offset: 0, color: 'rgba(0,229,255,0.25)' },
-        { offset: 1, color: 'rgba(0,229,255,0.02)' },
-      ])},
+      type: 'line', data: [], smooth: false,
+      lineStyle: { width: 1.5, color: '#00e5ff' },
+      areaStyle: {
+        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+          { offset: 0, color: 'rgba(0,229,255,0.25)' },
+          { offset: 1, color: 'rgba(0,229,255,0.02)' },
+        ]),
+      },
       symbol: 'none',
-      markLine: { silent: false, symbol: ['none', 'none'], data: buildMarkLines(speed) },
+      markLine: { silent: false, symbol: ['none', 'none'], data: [] },
     }],
-  }
+  })
+  return true
 }
 
-function initChart() {
-  chart = echarts.init(chartRef.value)
-  if (props.data) chart.setOption(buildOption(props.data, props.data.speed))
-}
+function refreshChart(data) {
+  if (!data) return
+  const sp = pickSpectrum(data)
+  if (!sp || !sp.freqs || sp.freqs.length === 0) return
 
-function updateChart(data) {
-  if (!chart || !data) return
+  if (!ensureChart()) return
+
   hasData.value = true
-  chart.setOption(buildOption(data, data.speed))
+  lastSpeed = data.speed || lastSpeed
+
+  const pts = sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
+  const chColor = channels.find(c => c.key === activeCh.value).color
+
+  // 增量更新，不重建整个 option
+  chart.setOption({
+    series: [{
+      data: pts,
+      lineStyle: { color: chColor },
+      markLine: { data: buildMarkLines(lastSpeed) },
+    }],
+  })
 }
 
-watch(activeCh, () => { if (props.data) updateChart(props.data) })
+function switchChannel(key) {
+  activeCh.value = key
+  if (props.data) refreshChart(props.data)
+}
 
-watch(() => props.data, (val) => {
-  if (!chart && chartRef.value) { initChart() }
-  updateChart(val)
+watch(() => props.data, async (val) => {
+  await nextTick()
+  refreshChart(val)
 }, { deep: true })
 
-onMounted(() => { if (props.data) { initChart(); updateChart(props.data) } })
-onUnmounted(() => { chart?.dispose() })
+onMounted(async () => {
+  await nextTick()
+  if (props.data) refreshChart(props.data)
+})
+
+onUnmounted(() => { chart?.dispose(); chart = null })
 
 const rh = () => chart?.resize()
 onMounted(() => window.addEventListener('resize', rh))

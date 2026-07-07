@@ -7,7 +7,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 
 const props = defineProps({ data: Object })
@@ -15,7 +15,9 @@ const chartRef = ref(null)
 let chart = null
 const hasData = ref(false)
 
-function initChart() {
+function ensureChart() {
+  if (chart) return true
+  if (!chartRef.value) return false
   chart = echarts.init(chartRef.value)
   chart.setOption({
     tooltip: { trigger: 'axis' },
@@ -47,10 +49,13 @@ function initChart() {
         lineStyle: { width: 1.5, color: '#e040fb' }, symbol: 'none' },
     ],
   })
+  return true
 }
 
-function updateChart(data) {
-  if (!chart || !data) return
+function refreshChart(data) {
+  if (!data || !data.timestamps || data.timestamps.length === 0) return
+  if (!ensureChart()) return
+
   hasData.value = true
   const idx = Array.from({ length: data.timestamps.length }, (_, i) => i)
   chart.setOption({
@@ -64,12 +69,17 @@ function updateChart(data) {
   })
 }
 
-watch(() => props.data, (val) => {
-  if (!chart && chartRef.value) { initChart() }
-  updateChart(val)
+watch(() => props.data, async (val) => {
+  await nextTick()
+  refreshChart(val)
 }, { deep: true })
-onMounted(() => { if (props.data) { initChart(); updateChart(props.data) } })
-onUnmounted(() => { chart?.dispose() })
+
+onMounted(async () => {
+  await nextTick()
+  if (props.data) refreshChart(props.data)
+})
+
+onUnmounted(() => { chart?.dispose(); chart = null })
 
 const rh = () => chart?.resize()
 onMounted(() => window.addEventListener('resize', rh))
