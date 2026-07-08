@@ -30,13 +30,6 @@ const channels = [
   { key: 'sound', label: 'Sound', color: '#e040fb' },
 ]
 
-function hexToRgba(hex, alpha) {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgba(${r},${g},${b},${alpha})`
-}
-
 function buildMarkLines(speed) {
   if (!speed || speed <= 0) return []
   return [
@@ -87,26 +80,19 @@ function initChart() {
   })
 }
 
-function pickSpectrum(data, channel) {
-  const ch = channel || activeCh.value
-  if (data[ch] && data[ch].freqs && data[ch].freqs.length > 0) {
-    return data[ch]
-  }
-  if (data.freqs && data.freqs.length > 0) {
-    return { freqs: data.freqs, amps: data.amps }
-  }
-  return null
-}
-
 function updateChart(data) {
   if (!chart || !data) return
 
   lastSpeed = data.speed || lastSpeed
+  const chKey = activeCh.value
 
-  const ch = channels.find(c => c.key === activeCh.value)
-  const sp = pickSpectrum(data)
+  // 从 API 响应中取当前通道的频谱
+  let sp = null
+  if (data[chKey] && data[chKey].freqs && data[chKey].freqs.length > 0) {
+    sp = data[chKey]
+  }
 
-  if (!sp || !sp.freqs || sp.freqs.length === 0) {
+  if (!sp) {
     chart.setOption({ series: [{ data: [] }] })
     return
   }
@@ -114,21 +100,9 @@ function updateChart(data) {
   hasData.value = true
   const pts = sp.freqs.map((f, i) => [f, sp.amps[i] || 0])
 
+  // 只更新 data，lineStyle/areaStyle/markLine 在 initChart 时设好不变
   chart.setOption({
-    series: [{
-      data: pts,
-      lineStyle: { width: 1.5, color: ch.color },
-      areaStyle: {
-        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-          { offset: 0, color: hexToRgba(ch.color, 0.25) },
-          { offset: 1, color: hexToRgba(ch.color, 0.02) },
-        ]),
-      },
-      markLine: lastSpeed > 0 ? {
-        silent: false, symbol: ['none', 'none'],
-        data: buildMarkLines(lastSpeed),
-      } : undefined,
-    }],
+    series: [{ data: pts }],
   })
 }
 
