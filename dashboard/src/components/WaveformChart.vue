@@ -1,6 +1,6 @@
 <template>
   <div class="waveform-chart">
-    <h3 class="panel-title">📊 实时振动波形</h3>
+    <h3 class="panel-title"><Activity :size="16" class="panel-title-icon" /> 实时振动波形</h3>
     <div ref="chartRef" class="chart-box"></div>
     <div class="no-data" v-if="!hasData">等待数据...</div>
   </div>
@@ -9,6 +9,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
+import { Activity } from 'lucide-vue-next'
 
 const props = defineProps({ data: Object })
 const chartRef = ref(null)

@@ -1,6 +1,6 @@
 <template>
   <div class="rms-trend">
-    <h3 class="panel-title">📉 RMS 振动趋势 (最近100条)</h3>
+    <h3 class="panel-title"><TrendingDown :size="16" class="panel-title-icon" /> RMS 振动趋势 (最近100条)</h3>
     <div ref="chartRef" class="chart-box"></div>
     <div class="no-data" v-if="!hasData">等待数据...</div>
   </div>
@@ -9,6 +9,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
+import { TrendingDown } from 'lucide-vue-next'
 
 const props = defineProps({ data: Object })
 const chartRef = ref(null)

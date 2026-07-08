@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "echarts": "^5.5.0",
+    "lucide-vue-next": "^0.577.0",
     "vue": "^3.4.0"
   },
   "devDependencies": {

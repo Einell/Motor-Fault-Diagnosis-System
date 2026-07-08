@@ -1,23 +1,24 @@
 <template>
   <div class="history-playback">
     <h3 class="panel-title">
-      ⏮️ 历史回放
+      <History :size="16" class="panel-title-icon" /> 历史回放
       <span class="record-count" v-if="total">共 {{ total }} 条</span>
     </h3>
 
     <!-- 回放控制栏 -->
     <div class="playback-controls">
-      <button @click="goFirst" title="最早">⏮</button>
-      <button @click="goPrev" title="上一条">◀</button>
+      <button @click="goFirst" title="最早"><ChevronsLeft :size="14" /></button>
+      <button @click="goPrev" title="上一条"><ChevronLeft :size="14" /></button>
       <span class="record-info" v-if="current">
         #{{ current.id }} / {{ total }} &nbsp; {{ current.label_name }}
         <span :class="current.correct ? 'ok' : 'err'">
-          {{ current.correct ? '✓' : '✗' }}
+          <Check v-if="current.correct" :size="12" />
+          <X v-else :size="12" />
         </span>
       </span>
       <span class="record-info" v-else>点击列表加载记录</span>
-      <button @click="goNext" title="下一条">▶</button>
-      <button @click="goLast" title="最新">⏭</button>
+      <button @click="goNext" title="下一条"><ChevronRight :size="14" /></button>
+      <button @click="goLast" title="最新"><ChevronsRight :size="14" /></button>
       <label class="auto-btn" :class="{ active: autoPlay }">
         <input type="checkbox" v-model="autoPlay" /> 自动
       </label>
@@ -55,6 +56,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { fetchHistory, fetchRecords } from '../api/index.js'
+import { History, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, Check, X } from 'lucide-vue-next'
 
 const records = ref([])
 const current = ref(null)

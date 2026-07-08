@@ -1,6 +1,6 @@
 <template>
   <div class="fault-pie">
-    <h3 class="panel-title">🥧 故障诊断统计</h3>
+    <h3 class="panel-title"><PieChart :size="16" class="panel-title-icon" /> 故障诊断统计</h3>
     <div class="pie-body" v-if="data">
       <div ref="chartRef" class="pie-chart"></div>
       <div class="pie-stats">
@@ -28,6 +28,7 @@
 <script setup>
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
+import { PieChart } from 'lucide-vue-next'
 
 const props = defineProps({ data: Object })
 const chartRef = ref(null)

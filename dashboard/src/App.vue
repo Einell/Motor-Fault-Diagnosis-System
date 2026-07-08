@@ -3,13 +3,13 @@
     <!-- 顶部标题栏 -->
     <header class="header">
       <div class="header-line left"></div>
-      <h1>⚙️ 电机智能故障诊断系统 — 实时监控大屏</h1>
+      <h1> 电机智能故障诊断系统 — 实时监控大屏</h1>
       <div class="header-line right"></div>
     </header>
 
     <!-- 告警横幅 -->
     <div class="alert-banner" v-if="faultAlert">
-      <span class="alert-icon">⚠️</span>
+      <span class="alert-icon"><AlertTriangle :size="18" /></span>
       <span class="alert-text">故障告警：检测到 {{ latest?.label_name }} &nbsp; 置信度 {{ (latest?.confidence * 100).toFixed(0) }}%</span>
       <button class="alert-dismiss" @click="dismissAlert">静音</button>
     </div>
@@ -49,20 +49,24 @@
 
     <!-- 底部信息条 -->
     <footer class="footer">
-      <span>📡 HUSTmotor 多模态电机故障数据集</span>
+      <span><Radio :size="13" class="footer-icon" /> HUSTmotor 多模态电机故障数据集</span>
       <span>|</span>
-      <span>🔗 MQTT Broker: localhost:1883</span>
+      <span><Link2 :size="13" class="footer-icon" /> MQTT Broker: localhost:1883</span>
       <span>|</span>
-      <span>🧠 模型: Random Forest (准确率 98.43%)</span>
+      <span><Brain :size="13" class="footer-icon" /> 模型: Random Forest</span>
       <span>|</span>
-      <span>🕐 {{ timeStr }}</span>
+      <span><Clock :size="13" class="footer-icon" /> {{ timeStr }}</span>
       <span>|</span>
       <span :class="apiOk ? 'api-ok' : 'api-err'">
-        {{ apiOk ? '✅ API 在线' : '⏳ API 等待...' }}
+        <Server v-if="apiOk" :size="13" class="footer-icon" />
+        <WifiOff v-else :size="13" class="footer-icon" />
+        {{ apiOk ? 'API 在线' : 'API 等待...' }}
       </span>
       <span>|</span>
       <span class="alert-status" :class="{ muted: alertMuted }">
-        {{ alertMuted ? '🔕 告警已静音' : '🔔 告警开启' }}
+        <Bell v-if="!alertMuted" :size="13" class="footer-icon" />
+        <BellOff v-else :size="13" class="footer-icon" />
+        {{ alertMuted ? '告警已静音' : '告警开启' }}
       </span>
     </footer>
   </div>
@@ -79,6 +83,9 @@ import SpectrumChart from './components/SpectrumChart.vue'
 import RmsTrend from './components/RmsTrend.vue'
 import FaultPie from './components/FaultPie.vue'
 import HistoryPlayback from './components/HistoryPlayback.vue'
+import {
+  Cog, AlertTriangle, Radio, Link2, Brain, Clock, Server, WifiOff, Bell, BellOff,
+} from 'lucide-vue-next'
 
 const latest = ref(null)
 const trend = ref(null)
@@ -203,7 +210,7 @@ body {
   padding: 6px 20px; margin-bottom: 8px;
   animation: alertPulse 2s infinite;
 }
-.alert-icon { font-size: 18px; }
+.alert-icon { display: flex; align-items: center; color: #ff8a80; }
 .alert-text { font-size: 14px; color: #ff8a80; font-weight: 600; }
 .alert-dismiss {
   background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
@@ -257,9 +264,9 @@ body {
 .main-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  grid-template-rows: 280px 280px 260px;
+  grid-template-rows:300px 300px 280px;
   gap: 12px;
-  height: calc(100vh - 150px);
+  min-height: calc(100vh - 130px);
 }
 .panel-status  { grid-row: 1; grid-column: 1; }
 .panel-pie     { grid-row: 1; grid-column: 2; }
@@ -281,4 +288,9 @@ body {
 .alert-status { color: #7eb8da; }
 .alert-status.muted { color: #5a5a5a; }
 @keyframes blink { 50% { opacity: 0.4; } }
+
+/* lucide 图标对齐 */
+.footer-icon { vertical-align: text-bottom; margin-right: 3px; stroke-width: 2; }
+.title-icon { vertical-align: middle; margin-right: 6px; color: #00b8ff; stroke-width: 2; }
+.panel-title-icon { vertical-align: middle; margin-right: 5px; stroke-width: 2; flex-shrink: 0; }
 </style>

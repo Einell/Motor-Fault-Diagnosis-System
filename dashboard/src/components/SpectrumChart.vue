@@ -1,6 +1,6 @@
 <template>
   <div class="spectrum-chart">
-    <h3 class="panel-title">📈 实时频谱分析 (FFT)</h3>
+    <h3 class="panel-title"><BarChart3 :size="16" class="panel-title-icon" /> 实时频谱分析 (FFT)</h3>
     <div class="channel-tabs" v-if="hasData">
       <button v-for="ch in channels" :key="ch.key"
         :class="{ active: activeCh === ch.key }"
@@ -14,6 +14,7 @@
 <script setup>
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import * as echarts from 'echarts'
+import { BarChart3 } from 'lucide-vue-next'
 
 const props = defineProps({ data: Object })
 const chartRef = ref(null)

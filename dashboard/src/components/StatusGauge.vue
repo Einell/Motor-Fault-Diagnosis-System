@@ -1,6 +1,6 @@
 <template>
   <div class="status-gauge">
-    <h3 class="panel-title">🔍 健康状态监测</h3>
+    <h3 class="panel-title"><Gauge :size="16" class="panel-title-icon" /> 健康状态监测</h3>
     <div class="gauge-body" v-if="data">
       <!-- 状态指示灯 -->
       <div class="status-light" :class="statusClass">
@@ -12,7 +12,9 @@
       <div class="status-info">
         <div class="status-label">{{ faultName }}</div>
         <div class="status-detail" :class="{ danger: !data.correct }">
-          {{ data.correct ? '✅ 诊断正确' : '❌ 诊断错误' }}
+          <CheckCircle2 v-if="data.correct" :size="14" class="status-icon-ok" />
+          <XCircle v-else :size="14" class="status-icon-err" />
+          {{ data.correct ? '诊断正确' : '诊断错误' }}
         </div>
       </div>
 
@@ -48,6 +50,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Gauge, CheckCircle2, XCircle } from 'lucide-vue-next'
 
 const props = defineProps({ data: Object })
 
@@ -102,8 +105,10 @@ const confLevel = computed(() => {
 }
 
 .status-label { font-size: 24px; font-weight: 700; color: #e0e6f0; }
-.status-detail { font-size: 13px; }
+.status-detail { font-size: 13px; display: flex; align-items: center; gap: 4px; }
 .status-detail.danger { color: #ff5252; }
+.status-icon-ok { color: #4caf50; flex-shrink: 0; }
+.status-icon-err { color: #ff5252; flex-shrink: 0; }
 
 /* 置信度条 */
 .confidence-bar { width: 100%; display: flex; align-items: center; gap: 10px; }
